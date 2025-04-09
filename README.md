@@ -53,6 +53,10 @@ This repository contains a modular Terraform implementation for provisioning a c
   - Loki
 - **Networking**:
   - NGINX Proxy Manager
+- **Productivity**:
+  - VaultWarden (Bitwarden-compatible password manager)
+  - NextCloud (file storage and collaboration)
+  - OnlyOffice (document editing suite)
 
 ### Budget & Monitoring
 - Comprehensive budget alerts at multiple thresholds
@@ -133,13 +137,13 @@ sudo file -s /dev/sdb
 sudo mkfs.ext4 /dev/sdb
 
 # Create mount point
-sudo mkdir -p /data
+sudo mkdir -p /opt/data
 
 # Mount the volume
-sudo mount /dev/sdb /data
+sudo mount /dev/sdb /opt/data
 
 # Add to fstab for persistence across reboots
-echo '/dev/sdb /data ext4 defaults 0 0' | sudo tee -a /etc/fstab
+echo '/dev/sdb /opt/data ext4 defaults 0 0' | sudo tee -a /etc/fstab
 ```
 
 ### 3. Verify Kubernetes (K3s) Installation
@@ -188,6 +192,41 @@ sudo docker-compose -f keycloak-docker-compose.yml up -d
 # Access admin console at: http://<instance_public_ip>:8090
 # Use credentials from environment variable
 ```
+
+#### VaultWarden (Password Manager)
+```bash
+# Start VaultWarden
+sudo docker-compose -f vaultwarden-docker-compose.yml up -d
+
+# Access at: http://<instance_public_ip>:8500
+# Admin interface at: http://<instance_public_ip>:8500/admin
+# Use the generated admin token from the MOTD
+```
+
+#### NextCloud (File Storage & Collaboration)
+```bash
+# Start NextCloud and its database
+sudo docker-compose -f nextcloud-docker-compose.yml up -d
+
+# Access at: http://<instance_public_ip>:8800
+# Default credentials: admin/<generated_password> (see MOTD)
+```
+
+#### OnlyOffice Document Server
+```bash
+# Start OnlyOffice
+sudo docker-compose -f onlyoffice-docker-compose.yml up -d
+
+# Access at: http://<instance_public_ip>:8880
+# For integration with NextCloud, use this URL in NextCloud OnlyOffice app settings
+```
+
+#### Integrating NextCloud with OnlyOffice
+1. In NextCloud, go to Apps and install the OnlyOffice app
+2. Go to Settings > OnlyOffice
+3. Set the Document Server URL to: http://<instance_public_ip>:8880/
+4. Set the JWT Secret to match the value in your MOTD
+5. Save and test the connection
 
 ### 5. Security Hardening
 
@@ -269,6 +308,8 @@ Creates alarms for CPU, memory, and disk usage to monitor the health of the inst
 2. **Service failures**: Use `systemctl status <service>` to check service status.
 3. **Disk mounting issues**: Verify with `lsblk` and check `/etc/fstab` entries.
 4. **Kubernetes problems**: Run `sudo kubectl get events` to see cluster events.
+5. **NextCloud issues**: Check logs with `docker logs nextcloud`.
+6. **VaultWarden issues**: Check logs with `docker logs vaultwarden`.
 
 ### Getting Support
 For assistance with this infrastructure, please create an issue in the repository or contact the infrastructure team.

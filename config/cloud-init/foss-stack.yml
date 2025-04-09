@@ -8,6 +8,26 @@ preserve_hostname: false
 package_update: true
 package_upgrade: true
 
+# Ensure disk_setup module is enabled
+cloud_config_modules:
+ - disk_setup
+ - mounts
+
+# Configure block volume (/dev/sdb)
+disk_setup:
+  /dev/sdb:
+    table_type: gpt
+    layout: true
+    overwrite: false
+
+fs_setup:
+  - device: /dev/sdb
+    filesystem: ext4
+    overwrite: false
+
+mounts:
+  - [ "/dev/sdb", "/opt/data", "ext4", "defaults,nofail,discard", "0", "2" ]
+
 # Install necessary packages (original + new)
 packages:
   # Core utilities
@@ -61,7 +81,16 @@ system_info:
 # Create directories for data persistence
 runcmd:
   # System setup
-  - mkdir -p /opt/data
+  # Verify that block volume is mounted properly
+  - |
+    echo "Verifying block volume mount..."
+    if ! df -h | grep -q "/opt/data"; then
+      echo "ERROR: Block volume not mounted at /opt/data. Manual intervention required."
+      exit 1
+    else
+      echo "Block volume successfully mounted at /opt/data"
+    fi
+  
   # Original databases
   - mkdir -p /opt/data/mongodb
   - mkdir -p /opt/data/redis
@@ -75,6 +104,12 @@ runcmd:
   - mkdir -p /opt/data/n8n
   - mkdir -p /opt/data/nginx-proxy-manager
   - mkdir -p /opt/data/loki
+  # Additional requested tools
+  - mkdir -p /opt/data/vaultwarden
+  - mkdir -p /opt/data/nextcloud
+  - mkdir -p /opt/data/nextcloud/html
+  - mkdir -p /opt/data/nextcloud/db
+  - mkdir -p /opt/data/onlyoffice
   # Main directories
   - mkdir -p /opt/docker
   - mkdir -p /opt/scripts
@@ -96,6 +131,9 @@ runcmd:
   - chown -R 1000:1000 /opt/data/minio
   - chown -R 1000:1000 /opt/data/keycloak
   - chown -R 1000:1000 /opt/data/n8n
+  - chown -R 1000:1000 /opt/data/vaultwarden
+  - chown -R 1000:1000 /opt/data/nextcloud
+  - chown -R 1000:1000 /opt/data/onlyoffice
   - chmod -R 755 /opt/logs
   
   # Configure UFW firewall
@@ -145,6 +183,11 @@ runcmd:
     export KEYCLOAK_DB_PASSWORD=$(openssl rand -base64 32)
     export MINIO_PASSWORD=$(openssl rand -base64 32)
     export N8N_PASSWORD=$(openssl rand -base64 32)
+    # New passwords for requested services
+    export VAULTWARDEN_ADMIN_TOKEN=$(openssl rand -base64 32)
+    export NEXTCLOUD_ADMIN_PASSWORD=$(openssl rand -base64 32)
+    export NEXTCLOUD_DB_PASSWORD=$(openssl rand -base64 32)
+    export ONLYOFFICE_JWT_SECRET=$(openssl rand -base64 32)
     
     # Start Docker if not running
     if ! systemctl is-active --quiet docker; then
@@ -280,6 +323,91 @@ runcmd:
           - /var/log:/host/var/log
           - /opt/data/promtail:/etc/promtail
         command: -config.file=/etc/promtail/config.yml
+        networks:
+          - app-network
+    EOL
+    
+    # VaultWarden (Bitwarden)
+    cat > /opt/docker/vaultwarden-docker-compose.yml << EOL
+    version: '3'
+    services:
+      vaultwarden:
+        image: vaultwarden/server:latest
+        container_name: vaultwarden
+        restart: unless-stopped
+        ports:
+          - "8500:80"  # Web interface
+        volumes:
+          - /opt/data/vaultwarden:/data
+        environment:
+          - ADMIN_TOKEN=\${VAULTWARDEN_ADMIN_TOKEN}
+          - DOMAIN=https://vault.example.com  # Change this to your actual domain
+          - SIGNUPS_ALLOWED=false  # Disable public signups
+          - WEBSOCKET_ENABLED=true  # For real-time sync
+          - LOG_LEVEL=warn
+        networks:
+          - app-network
+    EOL
+    
+    # NextCloud
+    cat > /opt/docker/nextcloud-docker-compose.yml << EOL
+    version: '3'
+    services:
+      nextcloud:
+        image: nextcloud:latest
+        container_name: nextcloud
+        restart: unless-stopped
+        depends_on:
+          - nextcloud-db
+        ports:
+          - "8800:80"
+        volumes:
+          - /opt/data/nextcloud/html:/var/www/html
+        environment:
+          - MYSQL_HOST=nextcloud-db
+          - MYSQL_DATABASE=nextcloud
+          - MYSQL_USER=nextcloud
+          - MYSQL_PASSWORD=\${NEXTCLOUD_DB_PASSWORD}
+          - NEXTCLOUD_ADMIN_USER=admin
+          - NEXTCLOUD_ADMIN_PASSWORD=\${NEXTCLOUD_ADMIN_PASSWORD}
+          - NEXTCLOUD_TRUSTED_DOMAINS=nextcloud.example.com localhost
+          - OVERWRITEPROTOCOL=https
+        networks:
+          - app-network
+      
+      nextcloud-db:
+        image: mariadb:10.6
+        container_name: nextcloud-db
+        restart: unless-stopped
+        volumes:
+          - /opt/data/nextcloud/db:/var/lib/mysql
+        environment:
+          - MYSQL_ROOT_PASSWORD=\${NEXTCLOUD_DB_PASSWORD}
+          - MYSQL_DATABASE=nextcloud
+          - MYSQL_USER=nextcloud
+          - MYSQL_PASSWORD=\${NEXTCLOUD_DB_PASSWORD}
+        networks:
+          - app-network
+    EOL
+    
+    # OnlyOffice
+    cat > /opt/docker/onlyoffice-docker-compose.yml << EOL
+    version: '3'
+    services:
+      onlyoffice:
+        image: onlyoffice/documentserver:latest
+        container_name: onlyoffice
+        restart: unless-stopped
+        ports:
+          - "8880:80"
+        volumes:
+          - /opt/data/onlyoffice/logs:/var/log/onlyoffice
+          - /opt/data/onlyoffice/data:/var/www/onlyoffice/Data
+          - /opt/data/onlyoffice/lib:/var/lib/onlyoffice
+          - /opt/data/onlyoffice/db:/var/lib/postgresql
+        environment:
+          - JWT_ENABLED=true
+          - JWT_SECRET=\${ONLYOFFICE_JWT_SECRET}
         networks:
           - app-network
     EOL
@@ -464,6 +592,11 @@ runcmd:
     - n8n Automation:     http://localhost:5678 (user: admin, password: ${N8N_PASSWORD})
     - Keycloak SSO:       http://localhost:8090 (user: admin, password: ${KEYCLOAK_PASSWORD})
     
+    === PRODUCTIVITY SUITE ===
+    - VaultWarden:        http://localhost:8500 (admin token: ${VAULTWARDEN_ADMIN_TOKEN})
+    - NextCloud:          http://localhost:8800 (user: admin, password: ${NEXTCLOUD_ADMIN_PASSWORD})
+    - OnlyOffice:         http://localhost:8880
+    
     === PATHS ===
     - Data:               /opt/data
     - Docker Compose:     /opt/docker
@@ -610,6 +743,18 @@ runcmd:
       - job_name: 'nginx'
         static_configs:
           - targets: ['nginx-proxy-manager:80']
+      
+      - job_name: 'vaultwarden'
+        static_configs:
+          - targets: ['vaultwarden:80']
+      
+      - job_name: 'nextcloud'
+        static_configs:
+          - targets: ['nextcloud:80']
+      
+      - job_name: 'onlyoffice'
+        static_configs:
+          - targets: ['onlyoffice:80']
     EOF
   
   # Set up automatic shutdown/startup
