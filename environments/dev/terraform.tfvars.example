@@ -1,0 +1,40 @@
+# OCI Provider Variables
+tenancy_ocid     = "ocid1.tenancy.oc1..exampleuniqueID"
+user_ocid        = "ocid1.user.oc1..exampleuniqueID"
+fingerprint      = "aa:bb:cc:dd:ee:ff:gg:hh:ii:jj:kk:ll:mm:nn:oo:pp"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "sa-saopaulo-1"
+
+# Compartment Variables
+compartment_name        = "foss-stack-dev-compartment"
+compartment_description = "Development compartment for FOSS stack resources"
+enable_delete           = true
+
+# Network Variables
+vcn_display_name  = "foss-stack-dev-vcn"
+vcn_cidr_blocks   = ["10.0.0.0/16"]
+subnet_display_name = "foss-stack-dev-subnet"
+subnet_cidr_block = "10.0.1.0/24"
+
+# Compute Variables - Smaller shape for development
+instance_display_name    = "foss-stack-dev-instance"
+instance_shape           = "VM.Standard.E2.2"  # Smaller shape for development
+operating_system         = "Canonical Ubuntu"
+operating_system_version = "22.04"
+boot_volume_size_in_gbs  = 50
+ssh_public_key_path      = "~/.ssh/ssh-key-2025-04-09.key.pub"
+
+# Storage Variables - Smaller volume for development
+volume_display_name = "foss-stack-dev-volume"
+volume_size_in_gbs  = 1024  # 1TB for development
+volume_vpus_per_gb  = 10    # Lower performance for development
+
+# Budget Variables
+budget_display_name = "Credit-Usage-Dev-Alert"
+budget_amount       = 100   # Lower budget for development
+alert_email         = "your-email@example.com"
+
+# Monitoring Variables
+cpu_threshold_percentage    = 80
+memory_threshold_percentage = 80
+disk_threshold_percentage   = 80

@@ -1,0 +1,40 @@
+# OCI Provider Variables
+tenancy_ocid     = "ocid1.tenancy.oc1..exampleuniqueID"
+user_ocid        = "ocid1.user.oc1..exampleuniqueID"
+fingerprint      = "aa:bb:cc:dd:ee:ff:gg:hh:ii:jj:kk:ll:mm:nn:oo:pp"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "sa-saopaulo-1"
+
+# Compartment Variables
+compartment_name        = "foss-stack-compartment"
+compartment_description = "Compartment for FOSS stack resources"
+enable_delete           = true
+
+# Network Variables
+vcn_display_name  = "foss-stack-vcn"
+vcn_cidr_blocks   = ["10.0.0.0/16"]
+subnet_display_name = "foss-stack-subnet"
+subnet_cidr_block = "10.0.1.0/24"
+
+# Compute Variables
+instance_display_name    = "foss-stack-instance"
+instance_shape           = "VM.Standard.E2.8"
+operating_system         = "Canonical Ubuntu"
+operating_system_version = "22.04"
+boot_volume_size_in_gbs  = 50
+ssh_public_key_path      = "~/.ssh/ssh-key-2025-04-09.key.pub"
+
+# Storage Variables
+volume_display_name = "foss-stack-volume"
+volume_size_in_gbs  = 16384  # 16TB
+volume_vpus_per_gb  = 20
+
+# Budget Variables
+budget_display_name = "Credit-Usage-Alert"
+budget_amount       = 250
+alert_email         = "your-email@example.com"
+
+# Monitoring Variables
+cpu_threshold_percentage    = 80
+memory_threshold_percentage = 80
+disk_threshold_percentage   = 80
