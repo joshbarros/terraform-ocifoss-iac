@@ -1,51 +1,80 @@
-# OCI Infrastructure Setup
+# OCI Paid Infrastructure
 
-This repository contains the Terraform configuration for setting up a temporary paid infrastructure in Oracle Cloud Infrastructure (OCI) until Free Tier capacity becomes available.
+This repository contains Terraform configurations for managing Oracle Cloud Infrastructure (OCI) resources using paid credits. This is a temporary setup until Free Tier capacity becomes available.
 
 ## Infrastructure Overview
 
 ### Compute Instance
 - **Name**: safe-haven
 - **Shape**: VM.Standard.E2.8
-- **Operating System**: Oracle Linux 8.10
+- **OS**: Ubuntu 22.04.5 LTS
+- **CPU**: 16 vCPUs (AMD EPYC 7551)
+- **Memory**: 62GB
 - **Boot Volume**: 50GB
-- **Public IP**: 144.22.220.8
-- **SSH Access**: `ssh opc@144.22.220.8`
-
-### Block Volume
-- **Name**: safe-haven-16tb-volume
-- **Size**: 16TB
-- **Performance**: 20 VPUs per GB
-- **File System**: XFS
-- **Mount Point**: /data
-- **Auto-tune**: Enabled
+- **Data Volume**: 16TB (mounted at /data)
+- **Auto-shutdown**: Daily at midnight (0 0 * * *)
+- **Auto-startup**: Daily at 8 AM (0 8 * * *)
 
 ### Networking
-- **VCN Name**: temp-paid-vcn
-- **CIDR Block**: 10.0.0.0/16
-- **Subnet CIDR**: 10.0.1.0/24
+- **VCN**: temp-paid-vcn (10.0.0.0/16)
+- **Subnet**: temp-paid-subnet (10.0.1.0/24)
 - **Internet Gateway**: temp-paid-ig
-- **Route Table**: temp-paid-rt
-- **Security List**: temp-paid-sl
-
-#### Open Ports
-- SSH (22)
-- HTTP (80)
-- HTTPS (443)
+- **Security Rules**:
+  - SSH (22)
+  - HTTP (80)
+  - HTTPS (443)
+  - All egress traffic
 
 ### Budget Monitoring
-- **Total Budget**: $250
+- **Total Budget**: US$250
 - **Alert Thresholds**:
-  - 10% ($25) - Initial monitoring
-  - 25% ($62.5) - Usage review
-  - 50% ($125) - Usage check
-  - 75% ($187.5) - Resource review
-  - 90% ($225) - Resource shutdown consideration
-  - 95% ($237.5) - Immediate shutdown required
+  - 10% (US$25): Initial monitoring
+  - 25% (US$62.5): Usage review
+  - 50% (US$125): Usage check
+  - 75% (US$187.5): Resource review
+  - 90% (US$225): Consider shutdown
+  - 95% (US$237.5): Critical shutdown
 
-### Automated Scheduling
-- **Daily Shutdown**: 00:00 (midnight)
-- **Daily Startup**: 08:00 (8 AM)
+## Access Information
+- **SSH Access**: `ssh ubuntu@<instance_public_ip> -i ~/.ssh/ssh-key-2025-04-09.key`
+- **Current Public IP**: 167.234.227.216
+
+## Resource Management
+- **Compartment**: temp-paid-resources
+- **Region**: sa-saopaulo-1
+- **Budget Expiration**: April 23rd
+
+## Usage Notes
+1. The infrastructure is automatically shut down at midnight and started at 8 AM daily
+2. Budget alerts are sent to goldenglowitsolutions@gmail.com
+3. The 16TB data volume is mounted at /data
+4. All resources are in a dedicated compartment for easy management
+
+## Terraform Commands
+```bash
+# Initialize Terraform
+terraform init
+
+# Format configuration
+terraform fmt
+
+# Validate configuration
+terraform validate
+
+# Create execution plan
+terraform plan
+
+# Apply changes
+terraform apply
+
+# Destroy infrastructure
+terraform destroy
+```
+
+## Security
+- SSH key authentication required
+- Public IP access restricted to necessary ports
+- Budget monitoring in place to prevent unexpected charges
 
 ## Directory Structure
 ```

@@ -122,6 +122,16 @@ data "oci_core_images" "ol8_images" {
   sort_order               = "DESC"
 }
 
+# Get Latest Ubuntu 22.04 Image
+data "oci_core_images" "ubuntu_images" {
+  compartment_id           = var.tenancy_ocid
+  operating_system         = "Canonical Ubuntu"
+  operating_system_version = "22.04"
+  shape                    = "VM.Standard.E2.8"
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
+}
+
 # Create the compute instance
 resource "oci_core_instance" "safe_haven" {
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
@@ -137,7 +147,7 @@ resource "oci_core_instance" "safe_haven" {
 
   source_details {
     source_type             = "image"
-    source_id               = data.oci_core_images.ol8_images.images[0].id
+    source_id               = data.oci_core_images.ubuntu_images.images[0].id
     boot_volume_size_in_gbs = 50
   }
 
@@ -152,11 +162,11 @@ resource "oci_core_instance" "safe_haven" {
 
 # Create a 16TB block volume
 resource "oci_core_volume" "data_volume" {
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
-  compartment_id      = oci_identity_compartment.paid_compartment.id
-  display_name        = "safe-haven-16tb-volume"
-  size_in_gbs         = "16384"
-  vpus_per_gb         = "20"
+  availability_domain  = data.oci_identity_availability_domains.ads.availability_domains[0].name
+  compartment_id       = oci_identity_compartment.paid_compartment.id
+  display_name         = "safe-haven-16tb-volume"
+  size_in_gbs          = "16384"
+  vpus_per_gb          = "20"
   is_auto_tune_enabled = true
 }
 
@@ -176,7 +186,7 @@ resource "null_resource" "setup_cron_jobs" {
   connection {
     type        = "ssh"
     host        = oci_core_instance.safe_haven.public_ip
-    user        = "opc"
+    user        = "ubuntu"
     private_key = file("~/.ssh/ssh-key-2025-04-09.key")
   }
 
@@ -189,7 +199,7 @@ resource "null_resource" "setup_cron_jobs" {
       "sudo mkdir -p /data",
       "echo '/dev/sdb1 /data xfs defaults,noatime 0 2' | sudo tee -a /etc/fstab",
       "sudo mount /data",
-      "sudo chown opc:opc /data",
+      "sudo chown ubuntu:ubuntu /data",
 
       # Set up cron jobs
       "echo '0 0 * * * /usr/sbin/shutdown -h now' | sudo tee /etc/cron.d/auto-shutdown",
