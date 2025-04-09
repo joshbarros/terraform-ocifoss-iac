@@ -12,7 +12,7 @@ resource "oci_monitoring_alarm" "cpu_alarm" {
   is_enabled            = true
   metric_compartment_id = var.compartment_id
   namespace             = var.alarm_namespace
-  query                 = "CpuUtilization[${var.metric_interval_in_seconds}].mean() > ${var.cpu_threshold_percentage}"
+  query                 = "CpuUtilization[5m].mean() > ${var.cpu_threshold_percentage}"
   severity              = var.alarm_severity
   body                  = var.alarm_body
   resource_group        = "compute-${var.instance_id}"
@@ -28,7 +28,7 @@ resource "oci_monitoring_alarm" "memory_alarm" {
   is_enabled            = true
   metric_compartment_id = var.compartment_id
   namespace             = var.alarm_namespace
-  query                 = "MemoryUtilization[${var.metric_interval_in_seconds}].mean() > ${var.memory_threshold_percentage}"
+  query                 = "MemoryUtilization[5m].mean() > ${var.memory_threshold_percentage}"
   severity              = var.alarm_severity
   body                  = var.alarm_body
   resource_group        = "compute-${var.instance_id}"
@@ -44,7 +44,7 @@ resource "oci_monitoring_alarm" "disk_alarm" {
   is_enabled            = true
   metric_compartment_id = var.compartment_id
   namespace             = var.alarm_namespace
-  query                 = "DiskUtilization[${var.metric_interval_in_seconds}].mean() > ${var.disk_threshold_percentage}"
+  query                 = "DiskUtilization[5m].mean() > ${var.disk_threshold_percentage}"
   severity              = var.alarm_severity
   body                  = var.alarm_body
   resource_group        = "compute-${var.instance_id}"
