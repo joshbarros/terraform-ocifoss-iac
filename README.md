@@ -1,155 +1,193 @@
-# OCI Paid Infrastructure
+# FULL-FOSS Software Agency Stack
 
-This repository contains Terraform configurations for managing Oracle Cloud Infrastructure (OCI) resources using paid credits. This is a temporary setup until Free Tier capacity becomes available.
+This repository contains the complete infrastructure and deployment configuration for a FOSS-first software agency development environment. This stack provides a comprehensive set of tools and services for modern software development, all using free and open-source software.
 
-## Infrastructure Overview
+## 🚀 Infrastructure Overview
 
-### Compute Instance
-- **Name**: safe-haven
-- **Shape**: VM.Standard.E2.8
-- **OS**: Ubuntu 22.04.5 LTS
-- **CPU**: 16 vCPUs (AMD EPYC 7551)
-- **Memory**: 62GB
-- **Boot Volume**: 50GB
-- **Data Volume**: 16TB (mounted at /data)
-- **Auto-shutdown**: Daily at midnight (0 0 * * *)
-- **Auto-startup**: Daily at 8 AM (0 8 * * *)
+### Compute Resources
+- Configured for OCI but adaptable to AWS and Hetzner
+- Automated deployment via Terraform and cloud-init
+- Configurable VM sizes based on workload requirements
+- Daily auto-shutdown/startup for cost optimization
 
-### Networking
-- **VCN**: temp-paid-vcn (10.0.0.0/16)
-- **Subnet**: temp-paid-subnet (10.0.1.0/24)
-- **Internet Gateway**: temp-paid-ig
-- **Security Rules**:
-  - SSH (22)
-  - HTTP (80)
-  - HTTPS (443)
-  - All egress traffic
+### Core Components
 
-### Budget Monitoring
-- **Total Budget**: US$250
-- **Alert Thresholds**:
-  - 10% (US$25): Initial monitoring
-  - 25% (US$62.5): Usage review
-  - 50% (US$125): Usage check
-  - 75% (US$187.5): Resource review
-  - 90% (US$225): Consider shutdown
-  - 95% (US$237.5): Critical shutdown
+#### 🧠 Core Technologies
+- **Linux (Ubuntu 22.04 LTS)**: Enterprise-grade OS foundation
+- **Docker + Compose**: Multi-service containerized application stacks
+- **Kubernetes (K3s)**: Lightweight production-grade orchestration
+- **Ansible**: Automated server provisioning & updates
+- **Terraform**: Infrastructure as code across multiple cloud providers
+- **NGINX Proxy Manager**: Reverse proxy with SSL and routing
 
-## Access Information
-- **SSH Access**: `ssh ubuntu@<instance_public_ip> -i ~/.ssh/ssh-key-2025-04-09.key`
-- **Current Public IP**: 167.234.227.216
+#### 📊 Monitoring & Observability
+- **Prometheus**: Metrics collection and alerting
+- **Grafana**: Visualization dashboards
+- **Loki**: Log aggregation
+- **Promtail**: Log collection agent
 
-## Resource Management
-- **Compartment**: temp-paid-resources
-- **Region**: sa-saopaulo-1
-- **Budget Expiration**: April 23rd
+#### 💾 Databases & Storage
+- **MongoDB**: Document database
+- **PostgreSQL** (via Supabase): Relational database
+- **Redis**: In-memory cache
+- **Neo4j**: Graph database
+- **QDrant**: Vector database
+- **MinIO**: S3-compatible object storage
 
-## Usage Notes
-1. The infrastructure is automatically shut down at midnight and started at 8 AM daily
-2. Budget alerts are sent to goldenglowitsolutions@gmail.com
-3. The 16TB data volume is mounted at /data
-4. All resources are in a dedicated compartment for easy management
+#### 🔐 Security & Access
+- **Keycloak**: Identity and access management with SSO
+- **OAuth2**: Standard authentication flows
+- **UFW Firewall**: Preconfigured with secure defaults
+- **Automatic SSL/TLS**: Via NGINX Proxy Manager
 
-## Terraform Commands
-```bash
-# Initialize Terraform
-terraform init
+#### 🤖 Automation & Workflow
+- **n8n**: Workflow automation engine
+- **Restic + Rclone**: Encrypted, 3-2-1 backups with GDrive support
+- **Scheduled maintenance**: Automatic updates and backups
 
-# Format configuration
-terraform fmt
+## 🚢 Deployment & Setup
 
-# Validate configuration
-terraform validate
+### Quick Start
 
-# Create execution plan
-terraform plan
-
-# Apply changes
-terraform apply
-
-# Destroy infrastructure
-terraform destroy
-```
-
-## Security
-- SSH key authentication required
-- Public IP access restricted to necessary ports
-- Budget monitoring in place to prevent unexpected charges
-
-## Directory Structure
-```
-terraform/
-├── main.tf           # Main Terraform configuration
-├── variables.tf      # Variable definitions
-├── terraform.tfvars.example  # Example variables file
-└── README.md        # This documentation
-```
-
-## Prerequisites
-- OCI CLI configured with appropriate credentials
-- Terraform installed
-- SSH key pair for instance access
-
-## Sensitive Information
-This repository is configured to protect sensitive information:
-
-1. Create a `terraform.tfvars` file with your actual values (this file is gitignored)
-2. Use `terraform.tfvars.example` as a template
-3. Never commit sensitive information like:
-   - OCI credentials (tenancy_ocid, user_ocid, etc.)
-   - SSH private keys
-   - API keys
-   - Email addresses
-   - Any other credentials
-
-## Usage
-1. Copy `terraform.tfvars.example` to `terraform.tfvars`:
+1. **Clone this repository**:
    ```bash
-   cp terraform.tfvars.example terraform.tfvars
+   git clone https://github.com/your-org/foss-stack.git
+   cd foss-stack
    ```
 
-2. Edit `terraform.tfvars` with your actual values
-
-3. Initialize Terraform:
+2. **Configure infrastructure**:
    ```bash
+   # Copy example configs
+   cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+   
+   # Edit with your cloud credentials and preferences
+   nano terraform/terraform.tfvars
+   ```
+
+3. **Deploy infrastructure**:
+   ```bash
+   cd terraform
    terraform init
-   ```
-
-4. Plan the infrastructure:
-   ```bash
-   terraform plan
-   ```
-
-5. Apply the configuration:
-   ```bash
    terraform apply
    ```
 
-## Important Notes
-- This infrastructure is set up in a temporary compartment named "temp-paid-resources"
-- The instance is configured with automatic shutdown/startup to optimize costs
-- All resources are monitored with budget alerts to prevent unexpected charges
-- The data volume is mounted at /data and formatted with XFS for optimal performance
+4. **Access your environment**:
+   ```bash
+   ssh ubuntu@<instance_public_ip> -i ~/.ssh/your-ssh-key.key
+   ```
 
-## Maintenance
-- Regular system updates are handled automatically
-- The instance will automatically reboot at 8 AM daily
-- The instance will automatically shut down at midnight daily
-- Budget alerts will notify via email at various spending thresholds
+### Component Access
 
-## Security
-- SSH access is restricted to key-based authentication
-- Only necessary ports (22, 80, 443) are open
-- The instance runs with minimal required permissions
-- Regular security updates are applied automatically
+Once deployed, access your services:
 
-## Monitoring
-- Budget monitoring is configured with multiple alert thresholds
-- System metrics are available through OCI Console
-- Resource utilization can be monitored through standard Linux tools
+| Service | URL | Default Credentials |
+|---------|-----|---------------------|
+| Grafana | http://your-ip:3000 | admin / (generated) |
+| NGINX Proxy Manager | http://your-ip:8080 | admin@example.com / changeme |
+| Keycloak | http://your-ip:8090 | admin / (generated) |
+| n8n | http://your-ip:5678 | admin / (generated) |
+| MinIO Console | http://your-ip:9001 | admin / (generated) |
+| Neo4j Browser | http://your-ip:7474 | neo4j / (generated) |
+| Supabase Studio | http://your-ip:3001 | (see motd) |
 
-## Cost Optimization
-- Automatic shutdown/startup schedule
-- Budget alerts at multiple thresholds
-- Efficient resource allocation
-- Regular monitoring of resource utilization 
+All generated credentials are displayed in the MOTD (Message of the Day) when you log in to the server.
+
+## 🛠️ Customization
+
+### Adding Services
+
+1. Create a new Docker Compose file in `/opt/docker/`:
+   ```bash
+   sudo nano /opt/docker/your-service-docker-compose.yml
+   ```
+
+2. Add your service configuration:
+   ```yaml
+   version: '3'
+   services:
+     your-service:
+       image: your-image:tag
+       container_name: your-service
+       restart: unless-stopped
+       ports:
+         - "your-port:container-port"
+       volumes:
+         - /opt/data/your-service:/data
+       environment:
+         - ENV_VAR=value
+       networks:
+         - app-network
+   
+   networks:
+     app-network:
+       external: true
+   ```
+
+3. Start your service:
+   ```bash
+   cd /opt/docker
+   docker-compose -f your-service-docker-compose.yml up -d
+   ```
+
+### Kubernetes Deployments
+
+For services that need Kubernetes:
+
+1. Create a Helm chart or manifest:
+   ```bash
+   mkdir -p /opt/k8s/your-app
+   nano /opt/k8s/your-app/deployment.yaml
+   ```
+
+2. Apply using kubectl:
+   ```bash
+   kubectl apply -f /opt/k8s/your-app/deployment.yaml
+   ```
+
+## 📚 Documentation
+
+Each component has detailed documentation:
+
+- [Infrastructure Management](docs/infrastructure.md)
+- [Database Setup & Migration](docs/databases.md)
+- [Authentication & Authorization](docs/auth.md)
+- [Monitoring & Alerts](docs/monitoring.md)
+- [Backup & Disaster Recovery](docs/backup.md)
+- [CI/CD Integration](docs/cicd.md)
+
+## 🛡️ Security Features
+
+- UFW firewall configured for minimal exposure
+- Automatic security updates
+- Encrypted backups with Restic
+- Keycloak SSO for centralized authentication
+- Secure credential generation and management
+
+## 👥 Contributing
+
+We welcome contributions to improve this stack:
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add some amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+## 📅 Roadmap
+
+- [ ] ArgoCD for GitOps-based Kubernetes management
+- [ ] Vault for secrets management
+- [ ] KEDA for autoscaling
+- [ ] Knative for serverless workloads
+- [ ] OpenSearch as Elasticsearch alternative
+- [ ] GitLab self-hosted option
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- All the amazing FOSS projects that make this stack possible
+- The cloud-native community for inspiration and best practices
+- Contributors who help improve and maintain this stack

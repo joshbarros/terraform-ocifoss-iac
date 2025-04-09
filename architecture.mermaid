@@ -1,0 +1,121 @@
+flowchart TD
+    %% Infrastructure layer
+    subgraph infra["Infrastructure"]
+        TF["Terraform"]
+        K3S["Kubernetes/K3s"]
+        ANS["Ansible"]
+        TF --> K3S
+        TF --> ANS
+    end
+
+    %% Security layer
+    subgraph sec["Security"]
+        KC["Keycloak SSO"]
+        NPM["NGINX Proxy Manager"]
+        UFW["Firewall/UFW"]
+        SSL["SSL/Let's Encrypt"]
+        NPM --> SSL
+        KC --- NPM
+    end
+
+    %% Database layer
+    subgraph db["Databases"]
+        MDB[("MongoDB")]
+        RDS[("Redis")]
+        NEO[("Neo4j")]
+        PG[("PostgreSQL")]
+        QD[("QDrant Vector DB")]
+    end
+
+    %% Storage layer
+    subgraph store["Storage"]
+        MINIO["MinIO S3"]
+        BCKP["Restic/Rclone Backups"]
+        GDRIVE[("Google Drive")]
+        MINIO --> BCKP
+        BCKP --> GDRIVE
+    end
+
+    %% Monitoring layer
+    subgraph mon["Monitoring"]
+        PROM["Prometheus"]
+        GRAF["Grafana"]
+        LOKI["Loki"]
+        PRTL["Promtail"]
+        NODE["Node Exporter"]
+        PROM --> GRAF
+        LOKI --> GRAF
+        NODE --> PROM
+        PRTL --> LOKI
+    end
+    
+    %% Automation layer
+    subgraph auto["Automation"]
+        N8N["n8n Workflows"]
+        AUTO["Cron Jobs"]
+        N8N --> AUTO
+    end
+
+    %% Application layer
+    subgraph app["Applications"]
+        SB["Supabase"]
+        APPS["Custom Applications"]
+        API["API Services"]
+    end
+
+    %% Cross-layer connections
+    K3S --> APPS
+    NPM --> APPS
+    NPM --> SB
+    NPM --> API
+    
+    KC --- GRAF
+    KC --- N8N
+    KC --- APPS
+    
+    MDB --- APPS
+    RDS --- APPS
+    NEO --- APPS
+    PG --- SB
+    QD --- APPS
+    
+    MINIO --- APPS
+    MINIO --- SB
+    
+    PROM --- K3S
+    PROM --- MDB
+    PROM --- RDS
+    PROM --- NEO
+    PROM --- QD
+    PROM --- NPM
+    
+    N8N --- MDB
+    N8N --- RDS
+    N8N --- API
+    
+    SB --- PG
+
+    %% Styling
+    classDef infrastructure fill:#e0f7fa,stroke:#006064,color:#006064
+    classDef security fill:#fff9c4,stroke:#f57f17,color:#f57f17
+    classDef database fill:#e8f5e9,stroke:#2e7d32,color:#2e7d32
+    classDef storage fill:#f3e5f5,stroke:#4a148c,color:#4a148c
+    classDef monitoring fill:#e3f2fd,stroke:#0d47a1,color:#0d47a1
+    classDef automation fill:#fce4ec,stroke:#880e4f,color:#880e4f
+    classDef application fill:#fffde7,stroke:#ff6f00,color:#ff6f00
+    
+    class TF,K3S,ANS infrastructure
+    class KC,NPM,UFW,SSL security
+    class MDB,RDS,NEO,PG,QD database
+    class MINIO,BCKP,GDRIVE storage
+    class PROM,GRAF,LOKI,PRTL,NODE monitoring
+    class N8N,AUTO automation
+    class SB,APPS,API application
+    
+    class infra infrastructure
+    class sec security
+    class db database
+    class store storage
+    class mon monitoring
+    class auto automation
+    class app application

@@ -153,6 +153,7 @@ resource "oci_core_instance" "safe_haven" {
 
   metadata = {
     ssh_authorized_keys = file("~/.ssh/ssh-key-2025-04-09.key.pub")
+    user_data = base64encode(file("scripts/cloud-init.yml"))
   }
 
   timeouts {

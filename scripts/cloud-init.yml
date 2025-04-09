@@ -1,0 +1,627 @@
+#cloud-config
+
+# Set hostname
+hostname: full-foss-stack
+preserve_hostname: false
+
+# Update packages
+package_update: true
+package_upgrade: true
+
+# Install necessary packages (original + new)
+packages:
+  # Core utilities
+  - docker.io
+  - docker-compose
+  - git
+  - curl
+  - wget
+  - unzip
+  - htop
+  - jq
+  - python3-pip
+  - python3-venv
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  # Web server & firewall
+  - nginx
+  - ufw
+  # Monitoring & logs
+  - prometheus-node-exporter
+  - ctop
+  - logrotate
+  # Kubernetes & Infrastructure tools
+  - apt-transport-https
+  - kubectl
+  - helm
+  # Backup tools
+  - restic
+  - rclone
+  # Ansible dependencies
+  - python3-yaml
+  - sshpass
+  # Additional utilities
+  - nmap
+  - tmux
+  - neovim
+  - net-tools
+  - dnsutils
+
+# Add user to docker group
+groups:
+  - docker
+
+system_info:
+  default_user:
+    groups: [docker]
+
+# Create directories for data persistence
+runcmd:
+  # System setup
+  - mkdir -p /opt/data
+  # Original databases
+  - mkdir -p /opt/data/mongodb
+  - mkdir -p /opt/data/redis
+  - mkdir -p /opt/data/qdrant
+  - mkdir -p /opt/data/neo4j
+  - mkdir -p /opt/data/supabase
+  # New FOSS additions
+  - mkdir -p /opt/data/minio
+  - mkdir -p /opt/data/keycloak
+  - mkdir -p /opt/data/k3s
+  - mkdir -p /opt/data/n8n
+  - mkdir -p /opt/data/nginx-proxy-manager
+  - mkdir -p /opt/data/loki
+  # Main directories
+  - mkdir -p /opt/docker
+  - mkdir -p /opt/scripts
+  - mkdir -p /opt/logs
+  - mkdir -p /opt/logs/docker
+  - mkdir -p /opt/logs/system
+  - mkdir -p /opt/logs/loki
+  - mkdir -p /opt/backups
+  - mkdir -p /opt/terraform
+  - mkdir -p /opt/ansible
+  
+  # Set permissions
+  - chmod -R 755 /opt/data
+  - chown -R 1000:1000 /opt/data/mongodb
+  - chown -R 1000:1000 /opt/data/qdrant
+  - chown -R 1000:1000 /opt/data/redis
+  - chown -R 1000:1000 /opt/data/neo4j
+  - chown -R 1000:1000 /opt/data/supabase
+  - chown -R 1000:1000 /opt/data/minio
+  - chown -R 1000:1000 /opt/data/keycloak
+  - chown -R 1000:1000 /opt/data/n8n
+  - chmod -R 755 /opt/logs
+  
+  # Configure UFW firewall
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow ssh
+  - ufw allow http
+  - ufw allow https
+  - ufw allow 6443/tcp  # Kubernetes API server
+  - ufw allow 8080/tcp  # NGINX Proxy Manager admin
+  - ufw allow 9000/tcp  # MinIO console port
+  - ufw --force enable
+  
+  # Install K3s (lightweight Kubernetes)
+  - curl -sfL https://get.k3s.io | sh -
+  - mkdir -p ~/.kube
+  - cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+  - chmod 600 ~/.kube/config
+  - export KUBECONFIG=~/.kube/config
+  - echo 'export KUBECONFIG=~/.kube/config' >> ~/.bashrc
+
+  # Install Helm
+  - curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+  # Create docker-compose files
+  # The actual content of these files will be created by the startup script
+
+  # Create enhanced start script
+  - |
+    cat > /opt/scripts/start-services.sh << 'EOF'
+    #!/bin/bash
+    set -e
+
+    echo "Starting Full FOSS Stack services..."
+    
+    # Generate secure passwords
+    export POSTGRES_PASSWORD=$(openssl rand -base64 32)
+    export JWT_SECRET=$(openssl rand -base64 32)
+    export ANON_KEY=$(openssl rand -base64 32)
+    export SERVICE_ROLE_KEY=$(openssl rand -base64 32)
+    export MONGO_PASSWORD=$(openssl rand -base64 32)
+    export REDIS_PASSWORD=$(openssl rand -base64 32)
+    export NEO4J_PASSWORD=$(openssl rand -base64 32)
+    export GRAFANA_PASSWORD=$(openssl rand -base64 32)
+    # New passwords for added services
+    export KEYCLOAK_PASSWORD=$(openssl rand -base64 32)
+    export KEYCLOAK_DB_PASSWORD=$(openssl rand -base64 32)
+    export MINIO_PASSWORD=$(openssl rand -base64 32)
+    export N8N_PASSWORD=$(openssl rand -base64 32)
+    
+    # Start Docker if not running
+    if ! systemctl is-active --quiet docker; then
+        systemctl start docker
+    fi
+    
+    # Start Kubernetes if not running
+    if ! systemctl is-active --quiet k3s; then
+        systemctl start k3s
+    fi
+    
+    # Create docker-compose files
+    
+    # n8n
+    cat > /opt/docker/n8n-docker-compose.yml << EOL
+    version: '3'
+    services:
+      n8n:
+        image: n8nio/n8n
+        restart: always
+        ports:
+          - "5678:5678"
+        environment:
+          - N8N_BASIC_AUTH_ACTIVE=true
+          - N8N_BASIC_AUTH_USER=admin
+          - N8N_BASIC_AUTH_PASSWORD=\${N8N_PASSWORD}
+          - NODE_ENV=production
+        volumes:
+          - /opt/data/n8n:/home/node/.n8n
+        networks:
+          - app-network
+    EOL
+
+    # MinIO
+    cat > /opt/docker/minio-docker-compose.yml << EOL
+    version: '3'
+    services:
+      minio:
+        image: minio/minio
+        container_name: minio
+        restart: unless-stopped
+        ports:
+          - "9000:9000"  # API port
+          - "9001:9001"  # Console port
+        volumes:
+          - /opt/data/minio:/data
+        environment:
+          - MINIO_ROOT_USER=admin
+          - MINIO_ROOT_PASSWORD=\${MINIO_PASSWORD}
+        command: server /data --console-address ":9001"
+        networks:
+          - app-network
+    EOL
+
+    # NGINX Proxy Manager
+    cat > /opt/docker/nginx-proxy-manager-docker-compose.yml << EOL
+    version: '3'
+    services:
+      nginx-proxy-manager:
+        image: 'jc21/nginx-proxy-manager:latest'
+        container_name: nginx-proxy-manager
+        restart: unless-stopped
+        ports:
+          - '80:80'
+          - '443:443'
+          - '8080:81'
+        volumes:
+          - /opt/data/nginx-proxy-manager/data:/data
+          - /opt/data/nginx-proxy-manager/letsencrypt:/etc/letsencrypt
+        networks:
+          - app-network
+    EOL
+
+    # Keycloak
+    cat > /opt/docker/keycloak-docker-compose.yml << EOL
+    version: '3'
+    services:
+      keycloak:
+        image: quay.io/keycloak/keycloak:latest
+        container_name: keycloak
+        restart: unless-stopped
+        environment:
+          - KEYCLOAK_ADMIN=admin
+          - KEYCLOAK_ADMIN_PASSWORD=\${KEYCLOAK_PASSWORD}
+          - KC_DB=postgres
+          - KC_DB_URL=jdbc:postgresql://postgres-keycloak:5432/keycloak
+          - KC_DB_USERNAME=keycloak
+          - KC_DB_PASSWORD=\${KEYCLOAK_DB_PASSWORD}
+        command: start-dev
+        ports:
+          - "8090:8080"
+        depends_on:
+          - postgres-keycloak
+        networks:
+          - app-network
+          
+      postgres-keycloak:
+        image: postgres:14
+        container_name: postgres-keycloak
+        restart: unless-stopped
+        environment:
+          - POSTGRES_DB=keycloak
+          - POSTGRES_USER=keycloak
+          - POSTGRES_PASSWORD=\${KEYCLOAK_DB_PASSWORD}
+        volumes:
+          - /opt/data/keycloak/postgres:/var/lib/postgresql/data
+        networks:
+          - app-network
+    EOL
+
+    # Loki
+    cat > /opt/docker/loki-docker-compose.yml << EOL
+    version: '3'
+    services:
+      loki:
+        image: grafana/loki:latest
+        container_name: loki
+        restart: unless-stopped
+        ports:
+          - "3100:3100"
+        command: -config.file=/etc/loki/local-config.yaml
+        volumes:
+          - /opt/data/loki:/loki
+        networks:
+          - app-network
+          
+      promtail:
+        image: grafana/promtail:latest
+        container_name: promtail
+        restart: unless-stopped
+        volumes:
+          - /opt/logs:/var/log
+          - /var/log:/host/var/log
+          - /opt/data/promtail:/etc/promtail
+        command: -config.file=/etc/promtail/config.yml
+        networks:
+          - app-network
+    EOL
+    
+    # Main docker-compose file
+    cat > /opt/docker/docker-compose.yml << EOL
+    version: '3.8'
+    
+    services:
+      # Node Exporter for system metrics
+      node-exporter:
+        image: prom/node-exporter:latest
+        container_name: node-exporter
+        restart: unless-stopped
+        ports:
+          - "9100:9100"
+        volumes:
+          - /proc:/host/proc:ro
+          - /sys:/host/sys:ro
+          - /:/rootfs:ro
+        command:
+          - '--path.procfs=/host/proc'
+          - '--path.sysfs=/host/sys'
+          - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+        networks:
+          - app-network
+    
+      # QDrant vector database
+      qdrant:
+        image: qdrant/qdrant:latest
+        container_name: qdrant
+        restart: unless-stopped
+        ports:
+          - "6333:6333"
+          - "6334:6334"
+        volumes:
+          - /opt/data/qdrant:/qdrant/storage
+        environment:
+          - QDRANT_ALLOW_RECOVERY_MODE=true
+        networks:
+          - app-network
+    
+      # MongoDB database
+      mongodb:
+        image: mongo:6.0
+        container_name: mongodb
+        restart: unless-stopped
+        ports:
+          - "27017:27017"
+        volumes:
+          - /opt/data/mongodb:/data/db
+        environment:
+          - MONGO_INITDB_ROOT_USERNAME=admin
+          - MONGO_INITDB_ROOT_PASSWORD=\${MONGO_PASSWORD}
+        networks:
+          - app-network
+    
+      # Redis cache
+      redis:
+        image: redis:7-alpine
+        container_name: redis
+        restart: unless-stopped
+        ports:
+          - "6379:6379"
+        volumes:
+          - /opt/data/redis:/data
+        command: redis-server --appendonly yes --requirepass \${REDIS_PASSWORD}
+        networks:
+          - app-network
+    
+      # Neo4J graph database
+      neo4j:
+        image: neo4j:5
+        container_name: neo4j
+        restart: unless-stopped
+        ports:
+          - "7474:7474"  # HTTP
+          - "7687:7687"  # Bolt
+        volumes:
+          - /opt/data/neo4j:/data
+        environment:
+          - NEO4J_AUTH=neo4j/\${NEO4J_PASSWORD}
+          - NEO4J_dbms_memory_pagecache_size=512M
+          - NEO4J_dbms_memory_heap_initial__size=512M
+          - NEO4J_dbms_memory_heap_max__size=1G
+        networks:
+          - app-network
+    
+      # Monitoring with Prometheus and Grafana
+      prometheus:
+        image: prom/prometheus:latest
+        container_name: prometheus
+        restart: unless-stopped
+        ports:
+          - "9090:9090"
+        volumes:
+          - /opt/data/prometheus:/etc/prometheus
+        command:
+          - '--config.file=/etc/prometheus/prometheus.yml'
+          - '--storage.tsdb.path=/prometheus'
+          - '--web.console.libraries=/etc/prometheus/console_libraries'
+          - '--web.console.templates=/etc/prometheus/consoles'
+          - '--web.enable-lifecycle'
+        networks:
+          - app-network
+    
+      grafana:
+        image: grafana/grafana:latest
+        container_name: grafana
+        restart: unless-stopped
+        ports:
+          - "3000:3000"
+        volumes:
+          - /opt/data/grafana:/var/lib/grafana
+        environment:
+          - GF_SECURITY_ADMIN_USER=admin
+          - GF_SECURITY_ADMIN_PASSWORD=\${GRAFANA_PASSWORD}
+          - GF_USERS_ALLOW_SIGN_UP=false
+          - GF_AUTH_GENERIC_OAUTH_ENABLED=true
+          - GF_AUTH_GENERIC_OAUTH_NAME=Keycloak
+          - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=grafana
+          - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=secret
+          - GF_AUTH_GENERIC_OAUTH_AUTH_URL=http://keycloak:8080/auth/realms/master/protocol/openid-connect/auth
+          - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=http://keycloak:8080/auth/realms/master/protocol/openid-connect/token
+          - GF_AUTH_GENERIC_OAUTH_API_URL=http://keycloak:8080/auth/realms/master/protocol/openid-connect/userinfo
+        networks:
+          - app-network
+    
+    networks:
+      app-network:
+        driver: bridge
+    EOL
+    
+    # Start all compose files
+    cd /opt/docker
+    for compose_file in *docker-compose.yml; do
+      echo "Starting services from $compose_file..."
+      docker-compose -f $compose_file up -d
+    done
+    
+    # Wait for services to be healthy
+    echo "Waiting for services to be healthy..."
+    for i in {1..30}; do
+        if docker ps | grep -q "healthy"; then
+            break
+        fi
+        sleep 2
+    done
+    
+    # Update MOTD with actual passwords and service info
+    cat > /etc/motd << EOL
+    
+    ███████╗██╗   ██╗██╗     ██╗        ███████╗ ██████╗ ███████╗███████╗
+    ██╔════╝██║   ██║██║     ██║        ██╔════╝██╔═══██╗██╔════╝██╔════╝
+    █████╗  ██║   ██║██║     ██║        █████╗  ██║   ██║███████╗███████╗
+    ██╔══╝  ██║   ██║██║     ██║        ██╔══╝  ██║   ██║╚════██║╚════██║
+    ██║     ╚██████╔╝███████╗███████╗   ██║     ╚██████╔╝███████║███████║
+    ╚═╝      ╚═════╝ ╚══════╝╚══════╝   ╚═╝      ╚═════╝ ╚══════╝╚══════╝
+                                                                          
+    SOFTWARE AGENCY STACK
+    
+    Available Services:
+    
+    === DATABASES ===
+    - QDrant Vector DB:    http://localhost:6333 
+    - MongoDB:            mongodb://admin:${MONGO_PASSWORD}@localhost:27017
+    - Redis:              redis://:${REDIS_PASSWORD}@localhost:6379
+    - Neo4J:              http://localhost:7474 (user: neo4j, password: ${NEO4J_PASSWORD})
+    - Supabase PostgreSQL: postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5432
+    
+    === MONITORING ===
+    - Prometheus:         http://localhost:9090
+    - Grafana:            http://localhost:3000 (user: admin, password: ${GRAFANA_PASSWORD})
+    - Loki:               http://localhost:3100
+    
+    === INFRASTRUCTURE ===
+    - Kubernetes (K3s):   kubectl available on path
+    - MinIO S3 Storage:   http://localhost:9001 (user: admin, password: ${MINIO_PASSWORD})
+    
+    === TOOLS ===
+    - NGINX Proxy Manager: http://localhost:8080 (Default: admin@example.com / changeme)
+    - n8n Automation:     http://localhost:5678 (user: admin, password: ${N8N_PASSWORD})
+    - Keycloak SSO:       http://localhost:8090 (user: admin, password: ${KEYCLOAK_PASSWORD})
+    
+    === PATHS ===
+    - Data:               /opt/data
+    - Docker Compose:     /opt/docker
+    - Scripts:            /opt/scripts
+    - Terraform:          /opt/terraform
+    - Ansible:            /opt/ansible
+    - Backups:            /opt/backups
+    
+    === AUTOMATION ===
+    - Daily backups:      11:00 PM
+    - Auto-shutdown:      12:00 AM
+    - Auto-startup:       8:00 AM
+    
+    EOL
+    
+    echo "Full FOSS Stack started successfully!"
+    EOF
+
+  # Create stop script
+  - |
+    cat > /opt/scripts/stop-services.sh << 'EOF'
+    #!/bin/bash
+    set -e
+
+    echo "Stopping Full FOSS Stack services..."
+    
+    # Stop all Docker Compose services
+    cd /opt/docker
+    for compose_file in *docker-compose.yml; do
+      echo "Stopping services from $compose_file..."
+      docker-compose -f $compose_file down
+    done
+    
+    # Stop Kubernetes
+    if systemctl is-active --quiet k3s; then
+        systemctl stop k3s
+    fi
+    
+    # Stop Docker if no other containers are running
+    if [ $(docker ps -q | wc -l) -eq 0 ]; then
+        systemctl stop docker
+    fi
+    
+    echo "All services stopped successfully!"
+    EOF
+
+  # Set permissions for scripts
+  - chmod +x /opt/scripts/start-services.sh
+  - chmod +x /opt/scripts/stop-services.sh
+  
+  # Create systemd service for FOSS stack (updated from original)
+  - |
+    cat > /etc/systemd/system/foss-stack.service << 'EOF'
+    [Unit]
+    Description=Full FOSS Software Agency Stack
+    After=docker.service
+    Requires=docker.service
+
+    [Service]
+    Type=oneshot
+    RemainAfterExit=yes
+    ExecStart=/opt/scripts/start-services.sh
+    ExecStop=/opt/scripts/stop-services.sh
+    TimeoutStartSec=0
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+  
+  # Enable and start the service
+  - systemctl daemon-reload
+  - systemctl enable foss-stack.service
+  
+  # Configure Loki
+  - mkdir -p /opt/data/promtail
+  - |
+    cat > /opt/data/promtail/config.yml << 'EOF'
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+    
+    positions:
+      filename: /tmp/positions.yaml
+    
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+    
+    scrape_configs:
+      - job_name: system
+        static_configs:
+          - targets:
+              - localhost
+            labels:
+              job: varlogs
+              __path__: /host/var/log/*log
+      
+      - job_name: docker
+        static_configs:
+          - targets:
+              - localhost
+            labels:
+              job: docker
+              __path__: /var/log/docker/*.log
+    EOF
+  
+  # Create prometheus config
+  - mkdir -p /opt/data/prometheus
+  - |
+    cat > /opt/data/prometheus/prometheus.yml << 'EOF'
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      - job_name: 'node'
+        static_configs:
+          - targets: ['node-exporter:9100']
+      
+      - job_name: 'docker'
+        static_configs:
+          - targets: ['host.docker.internal:9323']
+      
+      - job_name: 'kubernetes'
+        kubernetes_sd_configs:
+          - role: node
+            api_server: https://localhost:6443
+            tls_config:
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      
+      - job_name: 'minio'
+        metrics_path: /minio/v2/metrics/cluster
+        static_configs:
+          - targets: ['minio:9000']
+      
+      - job_name: 'loki'
+        static_configs:
+          - targets: ['loki:3100']
+      
+      - job_name: 'nginx'
+        static_configs:
+          - targets: ['nginx-proxy-manager:80']
+    EOF
+  
+  # Set up automatic shutdown/startup
+  - |
+    cat > /etc/cron.d/foss-stack-schedule << 'EOF'
+    # Shutdown at midnight
+    0 0 * * * root /opt/scripts/stop-services.sh && shutdown -h now
+    # Start at 8 AM (if supported by cloud provider)
+    0 8 * * * root systemctl start foss-stack.service
+    EOF
+  
+  # Restart Docker to apply changes
+  - systemctl restart docker
+
+final_message: "The Full FOSS Software Agency Stack is now installed and ready for configuration! Access the server using SSH with your private key." 
